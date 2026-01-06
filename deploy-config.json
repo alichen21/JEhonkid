@@ -1,0 +1,8 @@
+{
+  "repo_url": "https://github.com/alichen21/JEhonkid",
+  "service_name": "jehonkid",
+  "branch": "main",
+  "port": 8000,
+  "env_vars": {}
+}
+
