@@ -22,9 +22,10 @@ class TextProcessor:
             api_key: Super Mind API Key，如果不提供则从环境变量读取
             model: 使用的LLM模型，默认为grok-4-fast
         """
-        self.api_key = api_key or os.getenv('SUPER_MIND_API_KEY')
+        # 优先使用传入的 api_key，然后尝试 SUPER_MIND_API_KEY，最后尝试 AI_BUILDER_TOKEN（部署平台注入）
+        self.api_key = api_key or os.getenv('SUPER_MIND_API_KEY') or os.getenv('AI_BUILDER_TOKEN')
         if not self.api_key:
-            raise ValueError("Super Mind API Key未设置，请检查.env文件")
+            raise ValueError("API Key未设置，请设置 SUPER_MIND_API_KEY 或 AI_BUILDER_TOKEN 环境变量")
         
         self.model = model
         self.base_url = "https://space.ai-builders.com/backend/v1"

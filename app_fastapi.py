@@ -100,9 +100,22 @@ class TTSAudioRequest(BaseModel):
     text: str
     speaking_rate: Optional[float] = 0.75
 
-# 初始化OCR和文本处理器
-ocr = PictureToText()
-text_processor = TextProcessor()
+# 初始化OCR和文本处理器（使用 try-except 允许应用在没有环境变量时启动）
+ocr = None
+text_processor = None
+try:
+    ocr = PictureToText()
+    print("✅ OCR 模块已初始化")
+except Exception as e:
+    print(f"⚠️  OCR 模块初始化失败: {str(e)}")
+    print("   提示：需要设置 GOOGLE_CLOUD_API_KEY 环境变量")
+
+try:
+    text_processor = TextProcessor()
+    print("✅ 文本处理模块已初始化")
+except Exception as e:
+    print(f"⚠️  文本处理模块初始化失败: {str(e)}")
+    print("   提示：需要设置 SUPER_MIND_API_KEY 或 AI_BUILDER_TOKEN 环境变量")
 
 # 初始化TTS（如果可用）
 tts = None
@@ -140,6 +153,14 @@ def process_image_task(task_id: str, image_path: str):
         task_manager.update_task_status(task_id, TaskStatus.PROCESSING)
         
         # Step 1: OCR识别
+        if ocr is None:
+            task_manager.update_task_status(
+                task_id,
+                TaskStatus.FAILED,
+                error="OCR 模块未初始化，请检查 GOOGLE_CLOUD_API_KEY 环境变量"
+            )
+            return
+        
         task_manager.update_task_status(
             task_id, 
             TaskStatus.PROCESSING,
@@ -165,17 +186,24 @@ def process_image_task(task_id: str, image_path: str):
         # Step 2: 文本处理
         processed_text = None
         if ocr_result.get('full_text'):
-            task_manager.update_task_status(
-                task_id,
-                TaskStatus.TEXT_PROCESSING,
-                progress={'text_processing': 'processing'}
-            )
-            
-            print(f"[任务 {task_id}] 开始文本处理...")
-            text_processing_start = time.time()
-            processed_text = text_processor.process_ocr_text(ocr_result.get('full_text', ''))
-            text_processing_duration = time.time() - text_processing_start
-            print(f"[任务 {task_id}] 文本处理完成，耗时: {text_processing_duration:.2f} 秒")
+            if text_processor is None:
+                print(f"[任务 {task_id}] 文本处理模块未初始化，跳过文本处理步骤")
+                processed_text = {
+                    'cleaned_text': ocr_result.get('full_text', ''),
+                    'translation': '文本处理模块未初始化'
+                }
+            else:
+                task_manager.update_task_status(
+                    task_id,
+                    TaskStatus.TEXT_PROCESSING,
+                    progress={'text_processing': 'processing'}
+                )
+                
+                print(f"[任务 {task_id}] 开始文本处理...")
+                text_processing_start = time.time()
+                processed_text = text_processor.process_ocr_text(ocr_result.get('full_text', ''))
+                text_processing_duration = time.time() - text_processing_start
+                print(f"[任务 {task_id}] 文本处理完成，耗时: {text_processing_duration:.2f} 秒")
             
             if processed_text.get('error'):
                 task_manager.update_task_status(
@@ -319,6 +347,12 @@ def root():
 @app.get("/api/ocr/{filename:path}")
 def api_ocr(filename: str):
     """API端点 - 获取单个图片的OCR结果"""
+    if ocr is None:
+        raise HTTPException(
+            status_code=503, 
+            detail="OCR 模块未初始化，请检查 GOOGLE_CLOUD_API_KEY 环境变量"
+        )
+    
     image_path = os.path.join(UPLOAD_FOLDER, filename)
     
     if not os.path.exists(image_path):
