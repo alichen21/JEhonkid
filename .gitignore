@@ -54,3 +54,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# Runtime generated files (should not be committed)
+static/audio/
+static/uploads/
+
+# Keep static/css/ and other static assets that are part of the codebase
+!static/css/
+
