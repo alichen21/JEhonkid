@@ -22,9 +22,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # 安装系统依赖（用于图片处理等）
-# 注意：libgl1-mesa-glx 在 Debian Trixie 中已废弃，使用 libgl1 替代
+# Pillow 通常不需要 OpenGL 库，如果后续需要可以添加
 RUN apt-get update && apt-get install -y \
-    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
