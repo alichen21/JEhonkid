@@ -61,3 +61,6 @@ static/uploads/
 # Keep static/css/ and other static assets that are part of the codebase
 !static/css/
 
+# Example/test images (optional, can be removed)
+Picture books/
+
