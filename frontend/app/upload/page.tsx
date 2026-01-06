@@ -3,11 +3,11 @@
 import { useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { uploadImage } from '@/lib/api';
-import { useTaskPolling } from '@/lib/hooks/useTaskPolling';
-import UploadProgress from '@/components/UploadProgress';
-import UploadResult from '@/components/UploadResult';
-import CameraCapture from '@/components/CameraCapture';
+import { uploadImage } from '../lib/api';
+import { useTaskPolling } from '../lib/hooks/useTaskPolling';
+import UploadProgress from '../components/UploadProgress';
+import UploadResult from '../components/UploadResult';
+import CameraCapture from '../components/CameraCapture';
 
 export default function UploadPage() {
   const router = useRouter();

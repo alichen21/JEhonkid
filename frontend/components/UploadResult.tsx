@@ -1,4 +1,4 @@
-import { getStaticUrl } from '@/lib/api';
+import { getStaticUrl } from '../lib/api';
 
 interface UploadResultProps {
   result: {

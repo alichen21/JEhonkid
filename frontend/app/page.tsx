@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { getOCRResult, getImageUrl } from '@/lib/api';
-import ResultCard from '@/components/ResultCard';
-import StatsCards from '@/components/StatsCards';
+import { getOCRResult, getImageUrl } from '../lib/api';
+import ResultCard from '../components/ResultCard';
+import StatsCards from '../components/StatsCards';
 
 interface OCRResult {
   success: boolean;

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { getImageUrl } from '@/lib/api';
-import { useTTS } from '@/lib/hooks/useTTS';
+import { getImageUrl } from '../lib/api';
+import { useTTS } from '../lib/hooks/useTTS';
 import ProcessedTextSection from './ProcessedTextSection';
 
 interface OCRResult {
