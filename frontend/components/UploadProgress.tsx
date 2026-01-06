@@ -1,4 +1,4 @@
-import { TaskResult } from '../lib/api';
+import { TaskResult } from '@/lib/api';
 
 interface UploadProgressProps {
   task: TaskResult | null;
