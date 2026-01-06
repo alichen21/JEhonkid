@@ -8,7 +8,7 @@ WORKDIR /app/frontend
 COPY frontend/package*.json ./
 
 # 安装前端依赖
-RUN npm ci --only=production=false
+RUN npm ci
 
 # 复制前端源代码
 COPY frontend/ ./
@@ -22,8 +22,9 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # 安装系统依赖（用于图片处理等）
+# 注意：libgl1-mesa-glx 在 Debian Trixie 中已废弃，使用 libgl1 替代
 RUN apt-get update && apt-get install -y \
-    libgl1-mesa-glx \
+    libgl1 \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
