@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日语绘本OCR识别结果</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📚 日语绘本OCR识别结果</h1>
+            <p class="subtitle">亲子日语可理解输入助手 - Picture to Text</p>
+            <div style="margin-top: 20px;">
+                <a href="/upload" style="display: inline-block; background-color: #4CAF50; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-size: 16px;">
+                    📸 上传新图片
+                </a>
+            </div>
+        </header>
+
+        <div class="stats">
+            <div class="stat-card">
+                <span class="stat-number">{{ total_count }}</span>
+                <span class="stat-label">总图片数</span>
+            </div>
+            <div class="stat-card success">
+                <span class="stat-number">{{ success_count }}</span>
+                <span class="stat-label">识别成功</span>
+            </div>
+            <div class="stat-card error">
+                <span class="stat-number">{{ fail_count }}</span>
+                <span class="stat-label">识别失败</span>
+            </div>
+        </div>
+
+        <div class="results-grid">
+            {% for result in results %}
+            {% set image_index = loop.index0 %}
+            <div class="result-card {% if not result.success %}error-card{% endif %}">
+                <div class="card-header">
+                    <h2 class="filename">
+                        <span class="file-icon">📄</span>
+                        {{ result.filename }}
+                    </h2>
+                    {% if result.success %}
+                    <span class="badge success-badge">✓ 成功</span>
+                    {% else %}
+                    <span class="badge error-badge">✗ 失败</span>
+                    {% endif %}
+                </div>
+
+                <div class="card-content">
+                    <div class="image-section">
+                        <img src="{{ url_for('serve_image', filename=result.filename) }}" 
+                             alt="{{ result.filename }}"
+                             class="preview-image"
+                             loading="lazy">
+                    </div>
+
+                    {% if result.success %}
+                    <div class="text-section">
+                        <div class="section-title">
+                            <span class="icon">📝</span>
+                            识别文本
+                        </div>
+                        
+                        {% if result.full_text %}
+                        <div class="full-text">
+                            <div class="text-label">完整文本：</div>
+                            <div class="text-content">{{ result.full_text }}</div>
+                        </div>
+                        {% endif %}
+
+                        {% if result.text_blocks %}
+                        <div class="text-blocks">
+                            <div class="text-label">文本块 ({{ result.text_blocks|length }}个)：</div>
+                            <div class="blocks-container">
+                                {% for block in result.text_blocks %}
+                                <div class="text-block">
+                                    <span class="block-number">{{ loop.index }}</span>
+                                    <span class="block-text">{{ block.text }}</span>
+                                    {% if block.confidence %}
+                                    <span class="confidence">置信度: {{ "%.1f"|format(block.confidence * 100) }}%</span>
+                                    {% endif %}
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if result.language %}
+                        <div class="language-info">
+                            <div class="text-label">检测语言：</div>
+                            <div class="languages">
+                                {% for lang in result.language %}
+                                <span class="language-tag">
+                                    {{ lang.languageCode|upper }}
+                                    <span class="confidence-small">{{ "%.0f"|format(lang.confidence * 100) }}%</span>
+                                </span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        {% if result.processed_text and not result.processed_text.error %}
+                        <div class="processed-section">
+                            <div class="section-title">
+                                <span class="icon">✨</span>
+                                LLM处理结果
+                            </div>
+                            
+                            <!-- 难度控制面板 -->
+                            <div class="difficulty-controls" id="difficulty-controls-{{ image_index }}">
+                                <div class="control-group">
+                                    <label>每段句子数：</label>
+                                    <select id="sentences-per-segment-{{ image_index }}" onchange="updateSegments({{ image_index }})">
+                                        <option value="1">1句</option>
+                                        <option value="2" selected>2句</option>
+                                        <option value="3">3句</option>
+                                        <option value="4">4句</option>
+                                    </select>
+                                </div>
+                                <div class="control-group">
+                                    <label>语速：</label>
+                                    <input type="range" id="speaking-rate-{{ image_index }}" min="0.5" max="1.5" step="0.1" value="0.75" 
+                                           oninput="updateRateDisplay({{ image_index }}, this.value)">
+                                    <span id="rate-display-{{ image_index }}">0.75x</span>
+                                </div>
+                            </div>
+                            
+                            <!-- 指导语 -->
+                            {% if result.processed_text.instruction %}
+                            <div class="processed-text instruction-text">
+                                <div class="text-label-with-action">
+                                    <span>📋 指导语：</span>
+                                    <button class="play-button" onclick="playSegment(this, {{ image_index }}, 'instruction')" title="播放指导语">
+                                        <span class="play-icon">🔊</span>
+                                        <span class="play-text">播放</span>
+                                    </button>
+                                </div>
+                                <div class="text-content instruction-content" id="instruction-text-{{ image_index }}">{{ result.processed_text.instruction }}</div>
+                                <audio id="audio-instruction-{{ image_index }}" preload="none"></audio>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- 正文（完整） -->
+                            {% if result.processed_text.main_text %}
+                            <div class="processed-text main-text">
+                                <div class="text-label-with-action">
+                                    <span>📝 正文（完整）：</span>
+                                    <button class="play-button" onclick="playSegment(this, {{ image_index }}, 'main')" title="播放完整正文">
+                                        <span class="play-icon">🔊</span>
+                                        <span class="play-text">播放</span>
+                                    </button>
+                                </div>
+                                <div class="text-content japanese-content" id="main-text-{{ image_index }}">{{ result.processed_text.main_text }}</div>
+                                <audio id="audio-main-{{ image_index }}" preload="none"></audio>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- 分段朗读 -->
+                            {% if result.processed_text.segments and result.processed_text.segments|length > 0 %}
+                            <div class="segments-section">
+                                <div class="text-label">📖 分段朗读：</div>
+                                <div class="segments-container" id="segments-container-{{ image_index }}">
+                                    {% for segment in result.processed_text.segments %}
+                                    {% set segment_index = loop.index0 %}
+                                    <div class="segment-item">
+                                        <div class="segment-header">
+                                            <span class="segment-number">段落 {{ loop.index }}</span>
+                                            <button class="play-button segment-play-btn" onclick="playSegment(this, {{ image_index }}, {{ segment_index }})" 
+                                                    data-segment-index="{{ segment_index }}" title="播放此段落">
+                                                <span class="play-icon">🔊</span>
+                                                <span class="play-text">播放</span>
+                                            </button>
+                                        </div>
+                                        <div class="segment-content" id="segment-text-{{ image_index }}-{{ segment_index }}">{{ segment }}</div>
+                                        <audio id="audio-segment-{{ image_index }}-{{ segment_index }}" preload="none"></audio>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            
+                            <!-- 兼容旧格式：如果没有分段但有japanese_text -->
+                            {% if not result.processed_text.segments and result.processed_text.japanese_text %}
+                            <div class="processed-text">
+                                <div class="text-label-with-action">
+                                    <span>📝 日语正文：</span>
+                                    <button class="play-button" onclick="playSegment(this, {{ image_index }}, 'main')" title="播放日语朗读">
+                                        <span class="play-icon">🔊</span>
+                                        <span class="play-text">播放</span>
+                                    </button>
+                                </div>
+                                <div class="text-content japanese-content" id="main-text-{{ image_index }}">{{ result.processed_text.japanese_text }}</div>
+                                <audio id="audio-main-{{ image_index }}" preload="none"></audio>
+                            </div>
+                            {% endif %}
+
+                            {% if result.processed_text.chinese_translation %}
+                            <div class="processed-text">
+                                <div class="text-label">🇨🇳 中文翻译：</div>
+                                <div class="text-content chinese-content">{{ result.processed_text.chinese_translation }}</div>
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% elif result.processed_text and result.processed_text.error %}
+                        <div class="processed-section error-section">
+                            <div class="error-message">
+                                <span class="error-icon">⚠️</span>
+                                <div>
+                                    <strong>LLM处理失败</strong>
+                                    <p>{{ result.processed_text.error }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% else %}
+                    <div class="error-section">
+                        <div class="error-message">
+                            <span class="error-icon">⚠️</span>
+                            <div>
+                                <strong>识别失败</strong>
+                                <p>{{ result.error }}</p>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <footer>
+            <p>使用 Google Cloud Vision API 进行OCR识别 | Google Cloud Text-to-Speech API 进行语音合成</p>
+        </footer>
+    </div>
+
+    <script>
+        // 存储每个图片的分段数据
+        const segmentsData = {};
+        
+        // 初始化分段数据
+        {% for result in results %}
+        {% set image_index = loop.index0 %}
+        {% if result.processed_text and not result.processed_text.error and result.processed_text.segments %}
+        segmentsData[{{ image_index }}] = {{ result.processed_text.segments|tojson }};
+        {% endif %}
+        {% endfor %}
+        
+        // 播放指定文本段落的音频
+        async function playSegment(button, imageIndex, segmentType) {
+            let text = '';
+            let audioId = '';
+            
+            // 根据类型确定文本和音频元素
+            if (segmentType === 'instruction') {
+                const textElement = document.getElementById(`instruction-text-${imageIndex}`);
+                if (!textElement) {
+                    alert('未找到指导语');
+                    return;
+                }
+                text = textElement.textContent.trim();
+                audioId = `audio-instruction-${imageIndex}`;
+            } else if (segmentType === 'main') {
+                const textElement = document.getElementById(`main-text-${imageIndex}`);
+                if (!textElement) {
+                    alert('未找到正文');
+                    return;
+                }
+                text = textElement.textContent.trim();
+                audioId = `audio-main-${imageIndex}`;
+            } else {
+                // 分段索引
+                const segmentIndex = parseInt(segmentType);
+                const textElement = document.getElementById(`segment-text-${imageIndex}-${segmentIndex}`);
+                if (!textElement) {
+                    alert('未找到分段文本');
+                    return;
+                }
+                text = textElement.textContent.trim();
+                audioId = `audio-segment-${imageIndex}-${segmentIndex}`;
+            }
+            
+            if (!text) {
+                alert('文本内容为空');
+                return;
+            }
+            
+            const audioElement = document.getElementById(audioId);
+            if (!audioElement) {
+                alert('未找到音频元素');
+                return;
+            }
+            
+            // 获取当前语速设置
+            const speakingRate = parseFloat(document.getElementById(`speaking-rate-${imageIndex}`).value) || 0.75;
+            
+            // 如果音频已经加载，直接播放
+            if (audioElement.src && !audioElement.ended) {
+                if (audioElement.paused) {
+                    audioElement.play();
+                    updateButtonState(button, true);
+                } else {
+                    audioElement.pause();
+                    updateButtonState(button, false);
+                }
+                return;
+            }
+            
+            // 更新按钮状态为加载中
+            button.disabled = true;
+            const playIcon = button.querySelector('.play-icon');
+            const playText = button.querySelector('.play-text');
+            playIcon.textContent = '⏳';
+            playText.textContent = '生成中...';
+            
+            try {
+                // 调用TTS API，传递语速参数
+                const response = await fetch('/api/tts/audio', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        text: text,
+                        speaking_rate: speakingRate
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || 'TTS服务错误');
+                }
+                
+                // 创建音频URL
+                const audioBlob = await response.blob();
+                const audioUrl = URL.createObjectURL(audioBlob);
+                
+                // 设置音频源
+                audioElement.src = audioUrl;
+                
+                // 播放音频
+                audioElement.play();
+                updateButtonState(button, true);
+                
+                // 监听播放结束
+                audioElement.onended = function() {
+                    updateButtonState(button, false);
+                    URL.revokeObjectURL(audioUrl); // 释放内存
+                };
+                
+                // 监听播放错误
+                audioElement.onerror = function() {
+                    alert('音频播放失败');
+                    updateButtonState(button, false);
+                    button.disabled = false;
+                };
+                
+            } catch (error) {
+                console.error('TTS错误:', error);
+                alert('生成音频失败: ' + error.message);
+                updateButtonState(button, false);
+            } finally {
+                button.disabled = false;
+            }
+        }
+        
+        // 更新分段显示（根据每段句子数设置）
+        function updateSegments(imageIndex) {
+            const sentencesPerSegment = parseInt(document.getElementById(`sentences-per-segment-${imageIndex}`).value);
+            const segments = segmentsData[imageIndex];
+            
+            if (!segments || segments.length === 0) {
+                return;
+            }
+            
+            // 重新分段逻辑
+            const mainText = document.getElementById(`main-text-${imageIndex}`)?.textContent.trim() || '';
+            if (!mainText) {
+                return;
+            }
+            
+            // 简单的自动分段：按句号、问号、感叹号分割
+            const sentences = mainText.split(/([。！？\n])/).filter(s => s.trim());
+            const newSegments = [];
+            let currentSegment = '';
+            let sentenceCount = 0;
+            
+            for (let i = 0; i < sentences.length; i += 2) {
+                if (i < sentences.length) {
+                    let sentence = sentences[i].trim();
+                    if (i + 1 < sentences.length) {
+                        sentence += sentences[i + 1];
+                    }
+                    
+                    if (sentence) {
+                        if (currentSegment) {
+                            currentSegment += sentence;
+                        } else {
+                            currentSegment = sentence;
+                        }
+                        sentenceCount++;
+                        
+                        if (sentenceCount >= sentencesPerSegment) {
+                            newSegments.push(currentSegment.trim());
+                            currentSegment = '';
+                            sentenceCount = 0;
+                        }
+                    }
+                }
+            }
+            
+            if (currentSegment.trim()) {
+                newSegments.push(currentSegment.trim());
+            }
+            
+            // 更新显示
+            const container = document.getElementById(`segments-container-${imageIndex}`);
+            if (container) {
+                container.innerHTML = '';
+                newSegments.forEach((segment, index) => {
+                    const segmentDiv = document.createElement('div');
+                    segmentDiv.className = 'segment-item';
+                    segmentDiv.innerHTML = `
+                        <div class="segment-header">
+                            <span class="segment-number">段落 ${index + 1}</span>
+                            <button class="play-button segment-play-btn" onclick="playSegment(this, ${imageIndex}, ${index})" 
+                                    data-segment-index="${index}" title="播放此段落">
+                                <span class="play-icon">🔊</span>
+                                <span class="play-text">播放</span>
+                            </button>
+                        </div>
+                        <div class="segment-content" id="segment-text-${imageIndex}-${index}">${segment}</div>
+                        <audio id="audio-segment-${imageIndex}-${index}" preload="none"></audio>
+                    `;
+                    container.appendChild(segmentDiv);
+                });
+            }
+        }
+        
+        // 更新语速显示
+        function updateRateDisplay(imageIndex, rate) {
+            const display = document.getElementById(`rate-display-${imageIndex}`);
+            if (display) {
+                display.textContent = parseFloat(rate).toFixed(1) + 'x';
+            }
+        }
+        
+        // 更新按钮状态
+        function updateButtonState(button, isPlaying) {
+            const playIcon = button.querySelector('.play-icon');
+            const playText = button.querySelector('.play-text');
+            
+            if (isPlaying) {
+                playIcon.textContent = '⏸️';
+                playText.textContent = '暂停';
+                button.classList.add('playing');
+            } else {
+                playIcon.textContent = '🔊';
+                playText.textContent = '播放';
+                button.classList.remove('playing');
+            }
+        }
+        
+        // 兼容旧函数名
+        function playJapaneseText(button, index) {
+            playSegment(button, index, 'main');
+        }
+    </script>
+</body>
+</html>
+

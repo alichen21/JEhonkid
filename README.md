@@ -63,33 +63,38 @@ for block in result['text_blocks']:
 **命令行测试：**
 ```bash
 source venv/bin/activate
-python picture_to_text.py
+python tests/test_ocr.py
 ```
 
-**Web界面测试：**
+**启动服务：**
 
 方式1 - 使用启动脚本（推荐）：
 ```bash
-# macOS/Linux
-./start_web.sh
+# 启动 FastAPI 后端
+./scripts/start_fastapi.sh
 
-# Windows
-start_web.bat
+# 启动 Next.js 前端（新终端）
+cd frontend && npm run dev
 ```
 
 方式2 - 手动启动：
 ```bash
-source venv/bin/activate  # Windows: venv\Scripts\activate
-python app.py
+# 启动 FastAPI 后端
+source venv/bin/activate
+python app_fastapi.py
+
+# 启动 Next.js 前端（新终端）
+cd frontend && npm run dev
 ```
 
-启动后，在浏览器中访问：**http://127.0.0.1:5000**
+启动后：
+- FastAPI 后端：**http://127.0.0.1:8000** (API文档: http://127.0.0.1:8000/docs)
+- Next.js 前端：**http://localhost:3000**
 
-Web界面会显示：
-- 📊 统计信息（总图片数、成功/失败数）
-- 🖼️ 所有图片的预览
-- 📝 每张图片的OCR识别结果
-- 🏷️ 语言检测信息
+**检查服务状态：**
+```bash
+./scripts/check_services.sh
+```
 
 ## 环境设置
 
@@ -134,22 +139,35 @@ pip install -r requirements.txt
 
 ```
 JKid/
-├── Picture books/          # 示例图片
-├── templates/              # HTML模板
-│   └── index.html         # 主页面模板
-├── static/                 # 静态文件
-│   └── css/
-│       └── style.css       # 样式文件
-├── venv/                   # 虚拟环境
-├── .env                    # 环境变量（不提交到Git）
-├── .env.example            # 环境变量模板
-├── .gitignore             # Git忽略文件
-├── requirements.txt        # Python依赖
-├── app.py                 # Flask Web应用
-├── picture_to_text.py      # Picture to Text功能模块
-├── test_ocr.py            # OCR测试脚本
-├── example_usage.py        # API密钥使用示例
-└── README.md              # 项目说明文档
+├── frontend/               # Next.js 前端应用
+│   ├── app/              # Next.js App Router
+│   ├── components/       # React 组件
+│   └── lib/              # 工具库和 Hooks
+├── tests/                 # 测试文件
+│   ├── test_ocr.py       # OCR 测试
+│   ├── test_fastapi.py   # FastAPI 后端测试
+│   └── test_segmentation.py  # 分段功能测试
+├── scripts/               # 脚本文件
+│   ├── start_fastapi.sh  # 启动 FastAPI 服务
+│   ├── restart_fastapi.sh # 重启 FastAPI 服务
+│   └── check_services.sh  # 检查服务状态
+├── docs/                  # 文档
+│   └── ARCHITECTURE_ANALYSIS.md  # 架构分析文档
+├── Picture books/         # 示例图片
+├── static/                # 静态文件（上传的图片、音频等）
+│   ├── uploads/          # 用户上传的图片
+│   └── audio/            # 生成的音频文件
+├── venv/                  # 虚拟环境（不提交到Git）
+├── .env                   # 环境变量（不提交到Git）
+├── .gitignore            # Git忽略文件
+├── requirements.txt       # Python依赖
+├── app_fastapi.py         # FastAPI 后端主应用
+├── picture_to_text.py     # OCR 功能模块
+├── text_processor.py      # 文本处理模块
+├── text_to_speech.py      # TTS 功能模块
+├── task_manager.py        # 任务管理器
+├── Dockerfile            # Docker 配置
+└── README.md             # 项目说明文档
 ```
 
 ## 功能说明
@@ -169,12 +187,30 @@ JKid/
 - 生成自然流畅的日语正文
 - 提供准确的中文翻译供家长参考
 
+## 功能说明
+
+### 完整处理流程
+
+1. **图片上传** → 用户通过前端上传图片
+2. **OCR识别** → 使用Google Cloud Vision API识别日语文本
+3. **LLM处理** → 使用grok-4-fast模型清理和翻译文本
+4. **TTS生成** → 使用Google Cloud TTS生成日语语音
+5. **结果展示** → 在前端显示处理结果和音频播放
+
+### 核心模块
+
+- **picture_to_text.py**: OCR识别模块，支持HEIC格式转换
+- **text_processor.py**: 文本处理模块，去噪、去重、合并、翻译
+- **text_to_speech.py**: TTS模块，生成日语语音
+- **task_manager.py**: 任务管理器，支持异步处理
+
 ## 下一步开发计划
 
 - [x] OCR识别功能
 - [x] Web可视化界面
 - [x] LLM文本处理与翻译
-- [ ] TTS功能（文本转语音）
+- [x] TTS功能（文本转语音）
 - [ ] 移动端优化
 - [ ] 批量处理功能
+- [ ] 用户认证和会话管理
 

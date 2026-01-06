@@ -40,6 +40,9 @@ class TextProcessor:
         Returns:
             包含处理后的日语正文和中文翻译的字典，以及指导语和分段信息
         """
+        import time
+        start_time = time.time()
+        
         if not raw_text or not raw_text.strip():
             return {
                 "japanese_text": "",
@@ -49,6 +52,10 @@ class TextProcessor:
                 "segments": [],
                 "error": "输入文本为空"
             }
+        
+        # 记录输入文本长度
+        text_length = len(raw_text)
+        print(f"[文本处理] 开始处理，输入文本长度: {text_length} 字符")
         
         # 构建prompt
         prompt = f"""你是一个日语绘本专家。以下是从图片中 OCR 提取的碎片内容：{raw_text}
@@ -97,18 +104,35 @@ class TextProcessor:
             "max_tokens": 2000
         }
         
+        # 记录 prompt 长度
+        prompt_length = len(prompt)
+        print(f"[文本处理] Prompt 长度: {prompt_length} 字符")
+        
         try:
-            response = requests.post(self.api_url, json=payload, headers=headers, timeout=30)
+            api_start_time = time.time()
+            print(f"[文本处理] 开始调用 LLM API (模型: {self.model})...")
+            response = requests.post(self.api_url, json=payload, headers=headers, timeout=60)
+            api_end_time = time.time()
+            api_duration = api_end_time - api_start_time
+            print(f"[文本处理] LLM API 调用完成，耗时: {api_duration:.2f} 秒")
             response.raise_for_status()
             
+            parse_start_time = time.time()
             result = response.json()
             
             # 提取回复内容
             if 'choices' in result and len(result['choices']) > 0:
                 content = result['choices'][0]['message']['content']
+                response_length = len(content)
+                print(f"[文本处理] LLM 响应长度: {response_length} 字符")
                 
                 # 解析输出
                 parsed_result = self._parse_response(content)
+                parse_duration = time.time() - parse_start_time
+                print(f"[文本处理] 响应解析耗时: {parse_duration:.2f} 秒")
+                
+                total_duration = time.time() - start_time
+                print(f"[文本处理] 总耗时: {total_duration:.2f} 秒")
                 
                 return {
                     "japanese_text": parsed_result.get("japanese_text", ""),
@@ -116,7 +140,15 @@ class TextProcessor:
                     "instruction": parsed_result.get("instruction", ""),
                     "main_text": parsed_result.get("main_text", ""),
                     "segments": parsed_result.get("segments", []),
-                    "raw_response": content
+                    "raw_response": content,
+                    "_performance": {
+                        "total_time": total_duration,
+                        "api_time": api_duration,
+                        "parse_time": parse_duration,
+                        "input_length": text_length,
+                        "prompt_length": prompt_length,
+                        "response_length": response_length
+                    }
                 }
             else:
                 return {
@@ -128,7 +160,20 @@ class TextProcessor:
                     "error": "API返回格式异常"
                 }
         
+        except requests.exceptions.Timeout as e:
+            total_duration = time.time() - start_time
+            print(f"[文本处理] ❌ API 请求超时，总耗时: {total_duration:.2f} 秒")
+            return {
+                "japanese_text": "",
+                "chinese_translation": "",
+                "instruction": "",
+                "main_text": "",
+                "segments": [],
+                "error": f"API请求超时: {str(e)}"
+            }
         except requests.exceptions.RequestException as e:
+            total_duration = time.time() - start_time
+            print(f"[文本处理] ❌ API 请求失败，总耗时: {total_duration:.2f} 秒，错误: {str(e)}")
             return {
                 "japanese_text": "",
                 "chinese_translation": "",
@@ -138,6 +183,8 @@ class TextProcessor:
                 "error": f"API请求失败: {str(e)}"
             }
         except Exception as e:
+            total_duration = time.time() - start_time
+            print(f"[文本处理] ❌ 处理失败，总耗时: {total_duration:.2f} 秒，错误: {str(e)}")
             return {
                 "japanese_text": "",
                 "chinese_translation": "",

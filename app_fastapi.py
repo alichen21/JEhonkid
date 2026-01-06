@@ -171,7 +171,11 @@ def process_image_task(task_id: str, image_path: str):
                 progress={'text_processing': 'processing'}
             )
             
+            print(f"[任务 {task_id}] 开始文本处理...")
+            text_processing_start = time.time()
             processed_text = text_processor.process_ocr_text(ocr_result.get('full_text', ''))
+            text_processing_duration = time.time() - text_processing_start
+            print(f"[任务 {task_id}] 文本处理完成，耗时: {text_processing_duration:.2f} 秒")
             
             if processed_text.get('error'):
                 task_manager.update_task_status(
