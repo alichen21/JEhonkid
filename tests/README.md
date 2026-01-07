@@ -39,3 +39,6 @@ python tests/test_segmentation.py
 - 某些测试需要配置环境变量（如 API 密钥）
 - 测试文件会自动添加项目根目录到 Python 路径
 
+
+
+
