@@ -5,11 +5,27 @@
  * 开发模式：使用环境变量或默认本地地址
  */
 
-// 在浏览器环境中，如果 NEXT_PUBLIC_API_URL 未设置，使用相对路径
-// 这样部署后前后端在同一域名下，API 调用会自动使用当前域名
+// API 基础 URL 配置
+// 开发模式：使用环境变量或默认本地地址
+// 生产模式：如果未设置环境变量，使用相对路径（前后端同一域名）
+const getApiBaseUrl = () => {
+  // 如果设置了环境变量，优先使用
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  // 开发模式：默认使用本地后端地址
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://127.0.0.1:8000';
+  }
+  
+  // 生产模式：使用相对路径（前后端同一域名）
+  return '';
+};
+
 const API_BASE_URL = typeof window !== 'undefined' 
-  ? (process.env.NEXT_PUBLIC_API_URL || '')  // 浏览器环境：空字符串表示相对路径
-  : (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000');  // SSR 环境（虽然静态导出不使用）
+  ? getApiBaseUrl()  // 浏览器环境
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000');  // SSR 环境
 
 export interface OCRResult {
   success: boolean;
