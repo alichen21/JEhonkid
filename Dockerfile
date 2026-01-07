@@ -14,7 +14,7 @@ RUN npm ci
 COPY frontend/ ./
 
 # 构建前端（静态导出）
-RUN npm run build
+RUN NEXT_PUBLIC_BUILD_STATIC=true npm run build
 
 # 阶段2: Python 运行时
 FROM python:3.11-slim
