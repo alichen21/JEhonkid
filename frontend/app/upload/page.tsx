@@ -153,9 +153,21 @@ export default function UploadPage() {
       let fileToUpload: File;
       
       if (files.length === 1) {
+        // 单张图片：确保使用原始文件对象，不要重复读取
         fileToUpload = files[0];
+        
+        // iOS 特殊处理：如果文件可能被锁定，创建新的 File 对象
+        // 但只在必要时（如果文件已经被读取过）
+        if (fileToUpload.size === 0) {
+          // 文件可能已被消耗，需要重新创建
+          const blob = await fileToUpload.arrayBuffer().then(buf => new Blob([buf], { type: fileToUpload.type }));
+          fileToUpload = new File([blob], fileToUpload.name, { 
+            type: fileToUpload.type,
+            lastModified: Date.now()
+          });
+        }
       } else {
-        // 合并多张图片
+        // 合并多张图片（会创建新的 File 对象）
         fileToUpload = await mergeImages(files);
       }
       
@@ -165,6 +177,11 @@ export default function UploadPage() {
         type: fileToUpload.type
       });
       
+      // 确保文件对象有效
+      if (!fileToUpload || fileToUpload.size === 0) {
+        throw new Error('文件无效或已被消耗');
+      }
+      
       const result = await uploadImage(fileToUpload);
       console.log('上传成功:', result);
       setTaskId(result.task_id);
@@ -172,16 +189,24 @@ export default function UploadPage() {
     } catch (err) {
       console.error('上传错误:', err);
       const errorMessage = err instanceof Error ? err.message : '上传失败';
+      
+      // 特殊处理 "body is disturbed or locked" 错误
+      if (errorMessage.includes('disturbed') || errorMessage.includes('locked')) {
+        setError('上传失败：文件已被使用。请重新拍照或选择图片。');
+      } else {
+        setError(`上传失败: ${errorMessage}`);
+      }
+      
       console.error('错误详情:', {
         message: errorMessage,
         error: err
       });
-      setError(`上传失败: ${errorMessage}`);
       setUploading(false);
     }
   };
 
   // 合并多张图片为一张（垂直拼接）
+  // 修复 iOS "body is disturbed or locked" 问题：确保文件只被读取一次
   const mergeImages = async (files: File[]): Promise<File> => {
     // 确保 files 是数组
     if (!Array.isArray(files)) {
@@ -194,64 +219,122 @@ export default function UploadPage() {
     
     return new Promise((resolve, reject) => {
       const images: HTMLImageElement[] = [];
+      const imageDataUrls: string[] = []; // 存储 data URLs
       let loadedCount = 0;
       const totalImages = files.length;
+      let hasError = false;
 
-      files.forEach((file) => {
-        const img = new Image();
-        img.onload = () => {
-          loadedCount++;
-          if (loadedCount === totalImages) {
-            // 所有图片加载完成，开始合并
-            const canvas = document.createElement('canvas');
-            const ctx = canvas.getContext('2d');
+      // 第一步：读取所有文件为 data URL（只读取一次）
+      files.forEach((file, index) => {
+        const reader = new FileReader();
+        
+        reader.onload = (e) => {
+          if (hasError) return;
+          
+          const dataUrl = e.target?.result as string;
+          if (!dataUrl) {
+            hasError = true;
+            reject(new Error(`文件 ${index + 1} 读取失败`));
+            return;
+          }
+          
+          imageDataUrls[index] = dataUrl;
+          
+          // 创建 Image 对象并加载
+          const img = new Image();
+          img.onload = () => {
+            if (hasError) return;
             
-            if (!ctx) {
-              reject(new Error('无法创建canvas上下文'));
-              return;
-            }
+            images[index] = img;
+            loadedCount++;
+            
+            // 所有图片加载完成，开始合并
+            if (loadedCount === totalImages) {
+              try {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d', {
+                  willReadFrequently: false, // iOS 优化
+                  alpha: false
+                });
+                
+                if (!ctx) {
+                  reject(new Error('无法创建canvas上下文'));
+                  return;
+                }
 
-            // 计算总高度和最大宽度
-            let totalHeight = 0;
-            let maxWidth = 0;
-            images.forEach((img) => {
-              totalHeight += img.height;
-              maxWidth = Math.max(maxWidth, img.width);
-            });
+                // 计算总高度和最大宽度
+                let totalHeight = 0;
+                let maxWidth = 0;
+                images.forEach((img) => {
+                  if (img) {
+                    totalHeight += img.height;
+                    maxWidth = Math.max(maxWidth, img.width);
+                  }
+                });
 
-            canvas.width = maxWidth;
-            canvas.height = totalHeight;
+                if (maxWidth === 0 || totalHeight === 0) {
+                  reject(new Error('图片尺寸无效'));
+                  return;
+                }
 
-            // 绘制所有图片
-            let currentY = 0;
-            images.forEach((img) => {
-              ctx.drawImage(img, 0, currentY);
-              currentY += img.height;
-            });
+                canvas.width = maxWidth;
+                canvas.height = totalHeight;
 
-            // 转换为File
-            canvas.toBlob((blob) => {
-              if (!blob) {
-                reject(new Error('图片合并失败'));
-                return;
+                // 绘制所有图片
+                let currentY = 0;
+                images.forEach((img) => {
+                  if (img) {
+                    ctx.drawImage(img, 0, currentY);
+                    currentY += img.height;
+                  }
+                });
+
+                // 转换为 Blob，然后创建新的 File 对象
+                canvas.toBlob((blob) => {
+                  if (hasError) return;
+                  
+                  if (!blob) {
+                    reject(new Error('图片合并失败'));
+                    return;
+                  }
+                  
+                  // 创建全新的 File 对象，确保不被锁定
+                  const mergedFile = new File(
+                    [blob],
+                    `merged_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`,
+                    { 
+                      type: 'image/jpeg',
+                      lastModified: Date.now()
+                    }
+                  );
+                  resolve(mergedFile);
+                }, 'image/jpeg', 0.9);
+              } catch (error: any) {
+                hasError = true;
+                reject(new Error(`合并图片失败: ${error.message || '未知错误'}`));
               }
-              const mergedFile = new File(
-                [blob],
-                `merged_${Date.now()}.jpg`,
-                { type: 'image/jpeg' }
-              );
-              resolve(mergedFile);
-            }, 'image/jpeg', 0.9);
+            }
+          };
+          
+          img.onerror = () => {
+            if (!hasError) {
+              hasError = true;
+              reject(new Error(`图片 ${index + 1} 加载失败`));
+            }
+          };
+          
+          // 使用 data URL 加载图片（不直接读取文件）
+          img.src = dataUrl;
+        };
+        
+        reader.onerror = () => {
+          if (!hasError) {
+            hasError = true;
+            reject(new Error(`文件 ${index + 1} 读取失败`));
           }
         };
-        img.onerror = () => reject(new Error('图片加载失败'));
         
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          img.src = e.target?.result as string;
-          images.push(img);
-        };
-        reader.onerror = () => reject(new Error('文件读取失败'));
+        // 只读取一次文件
         reader.readAsDataURL(file);
       });
     });

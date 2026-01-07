@@ -14,7 +14,8 @@ RUN npm ci
 COPY frontend/ ./
 
 # 构建前端（静态导出）
-RUN NEXT_PUBLIC_BUILD_STATIC=true npm run build
+# 设置 NODE_ENV=production 确保 next.config.js 中的生产构建条件生效
+RUN NODE_ENV=production NEXT_PUBLIC_BUILD_STATIC=true npm run build
 
 # 阶段2: Python 运行时
 FROM python:3.11-slim
